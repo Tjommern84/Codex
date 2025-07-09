@@ -99,3 +99,22 @@ Klassene for Exercise, database-tilkobling, generator
 
 Konsollgrensesnitt for input og tekstfil-eksport
 
+
+---
+
+### Kompilering og kjøring
+Dette prosjektet krever Java og SQLite JDBC. Etter at `exercises.db` er opprettet i
+henhold til `schema.sql`, kan programmet kompileres slik:
+
+```bash
+javac -cp /path/to/sqlite-jdbc.jar src/main/java/com/codex/yoga/*.java
+```
+
+Start programmet med
+
+```bash
+java -cp .:/path/to/sqlite-jdbc.jar com.codex.yoga.App
+```
+
+Programmet spør om fokusområde og varighet, genererer en økt og lagrer den i en
+tekstfil i prosjektmappen.
