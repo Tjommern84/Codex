@@ -22,18 +22,35 @@ public class WorkoutGenerator {
         return copy.subList(0, Math.min(count, copy.size()));
     }
 
+    private List<Exercise> selectExercisesForDuration(List<Exercise> source, int durationMinutes) {
+        List<Exercise> result = new ArrayList<>();
+        List<Exercise> pool = new ArrayList<>(source);
+        Collections.shuffle(pool);
+        int total = 0;
+        while (total < durationMinutes) {
+            if (pool.isEmpty()) {
+                pool = new ArrayList<>(source);
+                Collections.shuffle(pool);
+            }
+            Exercise e = pool.remove(0);
+            result.add(e);
+            total += e.getDurationSeconds() / 60;
+        }
+        return result;
+    }
+
     public WorkoutSections generate(String focus, int totalMinutes) throws SQLException {
         int warmMinutes = (int)(totalMinutes * 0.33);
         int mainMinutes = (int)(totalMinutes * 0.5);
         int coolMinutes = totalMinutes - warmMinutes - mainMinutes;
 
-        List<Exercise> warm = randomSample(db.getExercisesBySection("warmup"), 3);
+        List<Exercise> warm = selectExercisesForDuration(db.getExercisesBySection("warmup"), warmMinutes);
         List<Exercise> main = db.getExercisesBySectionAndMuscle("main", focus);
         if (main.isEmpty()) {
             main = db.getExercisesBySection("main");
         }
-        main = randomSample(main, 5);
-        List<Exercise> cool = randomSample(db.getExercisesBySection("cooldown"), 2);
+        main = selectExercisesForDuration(main, mainMinutes);
+        List<Exercise> cool = selectExercisesForDuration(db.getExercisesBySection("cooldown"), coolMinutes);
 
         return new WorkoutSections(warm, main, cool, warmMinutes, mainMinutes, coolMinutes);
     }
@@ -41,11 +58,12 @@ public class WorkoutGenerator {
     public void output(WorkoutSections sections) throws IOException {
         DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyyMMdd");
         String fileName = "workout_" + LocalDate.now().format(fmt) + ".txt";
-        try (PrintWriter pw = new PrintWriter(fileName)) {
-            pw.println(formatSections(sections));
-        }
+        // File output temporarily disabled
+        // try (PrintWriter pw = new PrintWriter(fileName)) {
+        //     pw.println(formatSections(sections));
+        // }
         System.out.println(formatSections(sections));
-        System.out.println("\nSaved to " + fileName);
+        // System.out.println("\nSaved to " + fileName);
     }
 
     private String formatSections(WorkoutSections ws) {

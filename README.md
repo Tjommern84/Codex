@@ -116,5 +116,4 @@ Start programmet med
 java -cp .:/path/to/sqlite-jdbc.jar com.codex.yoga.App
 ```
 
-Programmet spør om fokusområde og varighet, genererer en økt og lagrer den i en
-tekstfil i prosjektmappen.
+Programmet spør om fokusområde og varighet og skriver treningsøkten i terminalen.
