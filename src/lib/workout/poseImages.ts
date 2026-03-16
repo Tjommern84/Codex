@@ -1,0 +1,41 @@
+// Mapping fra pose-slug til bildefil i /public/images/yoga/
+const SLUG_TO_IMAGE: Record<string, string> = {
+  skosnor:                '/images/yoga/Shoelace 1.png',
+  halv_skosnor:           '/images/yoga/Half-Shoelace.png',
+  sovende_svane:          '/images/yoga/Folded-Swan.png',
+  sal:                    '/images/yoga/Saddle.png',
+  halv_sal:               '/images/yoga/Half-Saddle 1.png',
+  drage:                  '/images/yoga/Dragon 1.png',
+  sommerfugl:             '/images/yoga/Butterfly.png',
+  halv_sommerfugl:        '/images/yoga/Half-Butterfly.png',
+  oyenstikker:            '/images/yoga/Dragonfly.png',
+  frosk:                  '/images/yoga/Frog.png',
+  halv_frosk:             '/images/yoga/Dragonfly-Side 1.png',
+  hest:                   '/images/yoga/Squat.png',
+  seiza:                  '/images/yoga/Toes-Squat.png',
+  larve:                  '/images/yoga/Catterpillar.png',
+  sfinks:                 '/images/yoga/Sphinx.png',
+  sel:                    '/images/yoga/Seal.png',
+  kamel:                  '/images/yoga/Camel.png',
+  snegl:                  '/images/yoga/Snail 2.png',
+  vridde_roter:           '/images/yoga/Twisted-Roots.png',
+  kattesvans:             '/images/yoga/Cat-Trail.png',
+  bananastilling:         '/images/yoga/Cat-Trail.png',
+  ponton:                 '/images/yoga/Gecko-2.png',
+  knebøy:                 '/images/yoga/Forward-Squat.png',
+  elefant:                '/images/yoga/Quarter-Dog.png',
+  apne_vinger:            '/images/yoga/Pentacle.png',
+  kryssede_vinger:        '/images/yoga/Half-Namaste.png',
+  smeltende_hjerte:       '/images/yoga/Melting-Heart.png',
+  hjerteopning:           '/images/yoga/Back-Eye of the Needle.png',
+  rullende_panda:         '/images/yoga/Lying-Half-Namaste.png',
+  konstruktiv_hvile:      '/images/yoga/Stirrup.png',
+  barneposen:             '/images/yoga/Child.png',
+  liggende_sete:          '/images/yoga/Stirrup.png',
+  stjerne_ser_paa_himmelen: '/images/yoga/Pentacle.png',
+  savasana:               '/images/yoga/Pentacle.png',
+}
+
+export function getPoseImage(slug: string): string | null {
+  return SLUG_TO_IMAGE[slug] ?? null
+}
