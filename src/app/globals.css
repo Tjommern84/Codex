@@ -5,11 +5,17 @@
 }
 
 :root {
-  --bg-primary: #1a1a2e;
-  --bg-card: #16213e;
-  --bg-inset: #1a1a3e;
-  --accent: #c9a96e;
-  --text-muted: #8888aa;
+  --bg-primary:    #FAF6F0;
+  --bg-secondary:  #F2EDE4;
+  --surface:       rgba(255, 252, 247, 0.72);
+  --gold:          #E8C99A;
+  --blush:         #DEB8A8;
+  --reed:          #8A9E8C;
+  --deep-reed:     #5C7A65;
+  --sky-ash:       #C8D4D8;
+  --text-primary:  #3A3530;
+  --text-secondary:#7A7068;
+  --text-ghost:    #B0A89E;
 }
 
 html {
@@ -18,17 +24,30 @@ html {
 
 body {
   background-color: var(--bg-primary);
-  color: #ffffff;
+  color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Slider-styling */
+/* Subtle noise texture — always on top, never interactive */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  opacity: 0.025;
+  mix-blend-mode: multiply;
+  z-index: 9998;
+}
+
+/* Range slider */
 input[type='range'] {
   -webkit-appearance: none;
   appearance: none;
-  height: 8px;
+  height: 4px;
   border-radius: 9999px;
-  background: #333355;
+  background: rgba(180, 160, 130, 0.18);
   outline: none;
   cursor: pointer;
 }
@@ -39,28 +58,35 @@ input[type='range']::-webkit-slider-thumb {
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--gold);
   cursor: pointer;
-  border: 2px solid #1a1a2e;
+  border: 3px solid var(--bg-primary);
+  box-shadow: 0 2px 8px rgba(180, 160, 130, 0.3);
+  transition: transform 0.15s ease;
+}
+
+input[type='range']::-webkit-slider-thumb:active {
+  transform: scale(1.15);
 }
 
 input[type='range']::-moz-range-thumb {
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--gold);
   cursor: pointer;
-  border: 2px solid #1a1a2e;
+  border: 3px solid var(--bg-primary);
+  box-shadow: 0 2px 8px rgba(180, 160, 130, 0.3);
 }
 
 /* Scrollbar */
 ::-webkit-scrollbar {
-  width: 4px;
+  width: 3px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #333355;
-  border-radius: 2px;
+  background: rgba(180, 160, 130, 0.25);
+  border-radius: 999px;
 }

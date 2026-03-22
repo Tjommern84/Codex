@@ -4,8 +4,18 @@
 import { BLOCK_WINDOWS, BLOCK_SIZE_MIN } from './constants'
 import type { Pose, WorkoutConfig, WorkoutPoseCard, WorkoutSections } from './types'
 
-function randomInt(min: number, max: number): number {
-  return Math.floor(Math.random() * (max - min + 1)) + min
+
+// Fast varighet per intensitetsnivå (bortsett fra Savasana som er separat):
+// LAV / LAV-MEDIUM (1-2):    5 min
+// MEDIUM / MEDIUM-HØY (3-4): 4 min
+// HØY / MAKS (5-6):          3 min
+const DURATION_SEC: Record<number, number> = {
+  1: 5 * 60,
+  2: 5 * 60,
+  3: 4 * 60,
+  4: 4 * 60,
+  5: 3 * 60,
+  6: 3 * 60,
 }
 
 function shuffle<T>(arr: T[]): T[] {
@@ -18,12 +28,13 @@ function shuffle<T>(arr: T[]): T[] {
 }
 
 function getEffectiveDurationSec(pose: Pose): number {
-  return randomInt(pose.duration_min_sec, pose.duration_max_sec)
+  return DURATION_SEC[pose.intensity_level] ?? 4 * 60
 }
 
 /**
  * Fyller en tidsluke med poser fra kandidatlisten.
- * Poser repeteres ved behov. Port av fillToTime() fra Java.
+ * Varighet er fast basert på intensitetsnivå.
+ * En pose hoppes over om det ikke er plass til dens fulle varighet.
  */
 function fillToTime(candidates: Pose[], targetSec: number, usedIds: Set<string>): WorkoutPoseCard[] {
   if (candidates.length === 0) return []
@@ -33,8 +44,12 @@ function fillToTime(candidates: Pose[], targetSec: number, usedIds: Set<string>)
   const available = shuffle(candidates.filter((p) => !usedIds.has(p.id)))
 
   for (const pose of available) {
-    if (elapsed >= targetSec) break
+    const remaining = targetSec - elapsed
+    if (remaining <= 0) break
+
     const duration = getEffectiveDurationSec(pose)
+    if (duration > remaining) continue
+
     result.push({ ...pose, assignedDurationSec: duration })
     usedIds.add(pose.id)
     elapsed += duration
@@ -51,7 +66,7 @@ function buildBlock(
   allPoses: Pose[],
   blockDurationSec: number,
   usedIds: Set<string>,
-  muscleFocus?: string
+  muscleFocus?: string[]
 ): WorkoutPoseCard[] {
   const result: WorkoutPoseCard[] = []
   let elapsed = 0
@@ -70,10 +85,12 @@ function buildBlock(
         p.category !== 'REBOUND'
     )
 
-    if (muscleFocus) {
+    if (muscleFocus && muscleFocus.length > 0) {
       const focused = candidates.filter((p) =>
         p.muscle_groups.some((mg) =>
-          mg.toLowerCase().includes(muscleFocus.toLowerCase())
+          muscleFocus.some((focus) =>
+            mg.toLowerCase().includes(focus.toLowerCase())
+          )
         )
       )
       if (focused.length > 0) candidates = focused
@@ -87,20 +104,11 @@ function buildBlock(
   return result
 }
 
-function buildWarmup(poses: Pose[], minutes: number, usedIds: Set<string>): WorkoutPoseCard[] {
-  const candidates = poses.filter(
-    (p) =>
-      p.intensity_level <= 2 &&
-      (p.category === 'SEAT' || p.category === 'SPINE')
-  )
-  return fillToTime(candidates, minutes * 60, usedIds)
-}
-
 function buildMain(
   poses: Pose[],
   minutes: number,
   usedIds: Set<string>,
-  muscleFocus?: string
+  muscleFocus?: string[]
 ): WorkoutPoseCard[] {
   const result: WorkoutPoseCard[] = []
   const totalSec = minutes * 60
@@ -118,36 +126,35 @@ function buildMain(
   return result
 }
 
-function buildCooldown(poses: Pose[], minutes: number, usedIds: Set<string>): WorkoutPoseCard[] {
-  const candidates = poses.filter((p) => p.category === 'REBOUND')
-  return fillToTime(candidates, minutes * 60, usedIds)
-}
+const SAVASANA_DURATION_SEC = 600 // alltid 10 min
 
 /**
  * Genererer et komplett yogaprogram.
- * @param poses – alle aktive poser fra databasen (lastet inn én gang og cachet)
- * @param config – varighet-konfigurasjon
+ * Starter alltid uten oppvarming og avslutter alltid med Savasana (10 min).
  */
 export function generateWorkout(
   poses: Pose[],
   config: WorkoutConfig
 ): WorkoutSections {
-  const { warmupMinutes, mainMinutes, cooldownMinutes, muscleFocus } = config
+  const { mainMinutes, muscleFocus } = config
 
   const usedIds = new Set<string>()
-  const warmup = buildWarmup(poses, warmupMinutes, usedIds)
   const main = buildMain(poses, mainMinutes, usedIds, muscleFocus)
-  const cooldown = buildCooldown(poses, cooldownMinutes, usedIds)
+
+  const savasana = poses.find((p) => p.slug === 'savasana')
+  const cooldown: WorkoutPoseCard[] = savasana
+    ? [{ ...savasana, assignedDurationSec: SAVASANA_DURATION_SEC }]
+    : []
 
   return {
-    warmup,
+    warmup: [],
     main,
     cooldown,
     meta: {
-      totalMinutes: warmupMinutes + mainMinutes + cooldownMinutes,
-      warmupMinutes,
+      totalMinutes: mainMinutes + 10,
+      warmupMinutes: 0,
       mainMinutes,
-      cooldownMinutes,
+      cooldownMinutes: 10,
     },
   }
 }
@@ -156,30 +163,17 @@ export function generateWorkout(
  * Validerer og normaliserer config-parametere.
  */
 export function resolveConfig(params: {
-  warmup?: number
   main?: number
-  cooldown?: number
-  muscleFocus?: string
+  muscleFocus?: string[]
 }): WorkoutConfig {
-  const MAX_SECTION = 180
-  const MAX_TOTAL = 300
+  const MAX_MAIN = 290 // savasana tar alltid 10 min
 
-  let warmup = Math.max(0, Math.min(params.warmup ?? 10, MAX_SECTION))
-  let main = Math.max(0, Math.min(params.main ?? 40, MAX_SECTION))
-  let cooldown = Math.max(0, Math.min(params.cooldown ?? 10, MAX_SECTION))
-
-  const total = warmup + main + cooldown
-  if (total > MAX_TOTAL) {
-    const scale = MAX_TOTAL / total
-    warmup = Math.round(warmup * scale)
-    main = Math.round(main * scale)
-    cooldown = Math.round(cooldown * scale)
-  }
+  const main = Math.max(10, Math.min(params.main ?? 50, MAX_MAIN))
 
   return {
-    warmupMinutes: warmup,
+    warmupMinutes: 0,
     mainMinutes: main,
-    cooldownMinutes: cooldown,
+    cooldownMinutes: 10,
     muscleFocus: params.muscleFocus,
   }
 }

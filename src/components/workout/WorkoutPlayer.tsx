@@ -5,41 +5,66 @@ import Image from 'next/image'
 import type { WorkoutPoseCard, WorkoutSections } from '@/lib/workout/types'
 import { getPoseImage } from '@/lib/workout/poseImages'
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+
 interface FlatPose extends WorkoutPoseCard {
-  section: 'Oppvarming' | 'Hovedprogram' | 'Avspenning'
+  section: 'Hovedprogram' | 'Savasana'
 }
 
 function flattenWorkout(workout: WorkoutSections): FlatPose[] {
   return [
-    ...workout.warmup.map((p) => ({ ...p, section: 'Oppvarming' as const })),
     ...workout.main.map((p) => ({ ...p, section: 'Hovedprogram' as const })),
-    ...workout.cooldown.map((p) => ({ ...p, section: 'Avspenning' as const })),
+    ...workout.cooldown.map((p) => ({ ...p, section: 'Savasana' as const })),
   ]
 }
 
-// ROGBIFF: dype, mørke farger — Fiolett → Rød
-const ROGBIFF: [number, number, number][] = [
-  [80, 15, 110],
-  [40, 20, 120],
-  [15, 50, 130],
-  [15, 90, 40],
-  [100, 90, 10],
-  [130, 60, 10],
-  [120, 20, 20],
-]
+// ─── Design tokens ────────────────────────────────────────────────────────────
 
-function getBgColor(progress: number): string {
-  const n = ROGBIFF.length - 1
-  const scaled = Math.max(0, Math.min(1, progress)) * n
-  const i = Math.min(Math.floor(scaled), n - 1)
-  const t = scaled - i
-  const a = ROGBIFF[i]
-  const b = ROGBIFF[i + 1]
-  const r = Math.round(a[0] + (b[0] - a[0]) * t)
-  const g = Math.round(a[1] + (b[1] - a[1]) * t)
-  const bl = Math.round(a[2] + (b[2] - a[2]) * t)
-  return `rgb(${r}, ${g}, ${bl})`
+const TOKENS = {
+  bgPage:    '#FAF6F0',
+  bgCard:    '#F2EDE4',
+  bgCardAlt: '#EDE7DC',
+
+  textPrimary:   '#3A3530',
+  textSecondary: '#7A7068',
+  textGhost:     '#B0A89E',
+
+  green:      '#4A6B56',
+  greenLight: '#E8EFE9',
+  gold:       '#C9A96E',
+  goldLight:  '#F5EDD8',
+
+  border:       'rgba(58,53,48,0.10)',
+  borderStrong: 'rgba(58,53,48,0.18)',
 }
+
+// ─── Intensity badge colours ───────────────────────────────────────────────────
+
+const INTENSITY_STYLE: Record<string, { bg: string; color: string }> = {
+  'lav':        { bg: TOKENS.greenLight, color: TOKENS.green },
+  'lav-medium': { bg: TOKENS.greenLight, color: TOKENS.green },
+  'medium':     { bg: TOKENS.goldLight,  color: '#8A6830'    },
+  'medium-høy': { bg: TOKENS.goldLight,  color: '#8A6830'    },
+  'høy':        { bg: '#FDE8DC',         color: '#A04520'    },
+  'maks':       { bg: '#FCDDD4',         color: '#8B2F1E'    },
+}
+
+function getIntensityStyle(label?: string) {
+  if (!label) return null
+  return INTENSITY_STYLE[label.toLowerCase()] ?? null
+}
+
+// ─── Section pill colours ──────────────────────────────────────────────────────
+
+const SECTION_STYLE: Record<string, { bg: string; color: string }> = {
+  Savasana:     { bg: TOKENS.goldLight,  color: '#8A6830'   },
+  Hovedprogram: { bg: TOKENS.greenLight, color: TOKENS.green },
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const DISPLAY = "var(--font-display, 'Cormorant Garamond', serif)"
+const BODY    = "var(--font-body, 'DM Sans', sans-serif)"
 
 function formatTime(sec: number): string {
   const m = Math.floor(sec / 60)
@@ -48,24 +73,20 @@ function formatTime(sec: number): string {
 }
 
 function playTransitionTone(audioCtx: AudioContext) {
-  const osc = audioCtx.createOscillator()
+  const osc  = audioCtx.createOscillator()
   const gain = audioCtx.createGain()
   osc.connect(gain)
   gain.connect(audioCtx.destination)
   osc.type = 'sine'
   osc.frequency.setValueAtTime(432, audioCtx.currentTime)
   gain.gain.setValueAtTime(0, audioCtx.currentTime)
-  gain.gain.linearRampToValueAtTime(0.18, audioCtx.currentTime + 0.08)
-  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.2)
+  gain.gain.linearRampToValueAtTime(0.12, audioCtx.currentTime + 0.10)
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.4)
   osc.start(audioCtx.currentTime)
-  osc.stop(audioCtx.currentTime + 1.2)
+  osc.stop(audioCtx.currentTime + 1.4)
 }
 
-interface Props {
-  workout: WorkoutSections
-  onClose: () => void
-  showInstructions?: boolean
-}
+// ─── Circular timer ───────────────────────────────────────────────────────────
 
 function CircularTimer({
   progress,
@@ -78,462 +99,498 @@ function CircularTimer({
   isRunning: boolean
   onToggle: () => void
 }) {
-  const radius = 48
+  const radius      = 36
   const circumference = 2 * Math.PI * radius
-  const strokeDashoffset = circumference * progress
+  const dashOffset  = circumference * progress
 
   return (
     <button
       onClick={onToggle}
-      className="relative flex items-center justify-center"
-      style={{ width: 120, height: 120 }}
       aria-label={isRunning ? 'Pause' : 'Fortsett'}
+      style={{
+        position: 'relative',
+        width: 96,
+        height: 96,
+        background: 'none',
+        border: 'none',
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+      }}
     >
       <svg
-        width="120"
-        height="120"
-        viewBox="0 0 120 120"
-        style={{ transform: 'rotate(-90deg)' }}
+        width="96"
+        height="96"
+        viewBox="0 0 96 96"
+        style={{ position: 'absolute', transform: 'rotate(-90deg)' }}
       >
         <circle
-          cx="60"
-          cy="60"
-          r={radius}
+          cx="48" cy="48" r={radius}
           fill="none"
-          stroke="rgba(255,255,255,0.1)"
-          strokeWidth="3"
+          stroke={TOKENS.border}
+          strokeWidth="2"
         />
         <circle
-          cx="60"
-          cy="60"
-          r={radius}
+          cx="48" cy="48" r={radius}
           fill="none"
-          stroke="rgba(255,255,255,0.7)"
-          strokeWidth="3"
+          stroke={TOKENS.gold}
+          strokeWidth="2.5"
           strokeLinecap="round"
           strokeDasharray={circumference}
-          strokeDashoffset={strokeDashoffset}
+          strokeDashoffset={dashOffset}
           style={{ transition: 'stroke-dashoffset 1s linear' }}
         />
       </svg>
 
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span
-          className="tabular-nums text-white font-light"
-          style={{
-            fontFamily: "'Cormorant Garamond', serif",
-            fontSize: '1.75rem',
-            letterSpacing: '0.05em',
-            lineHeight: 1,
-          }}
-        >
+      <div style={{ position: 'relative', textAlign: 'center' }}>
+        <div style={{
+          fontFamily: DISPLAY,
+          fontSize: '1.45rem',
+          fontWeight: 300,
+          color: TOKENS.textPrimary,
+          letterSpacing: '0.03em',
+          lineHeight: 1,
+        }}>
           {formatTime(timeLeft)}
-        </span>
-        <span
-          className="text-white mt-1"
-          style={{ fontSize: '0.55rem', opacity: 0.4, letterSpacing: '0.12em', fontFamily: "'DM Sans', sans-serif" }}
-        >
+        </div>
+        <div style={{
+          fontFamily: BODY,
+          fontSize: '0.5rem',
+          color: TOKENS.textGhost,
+          letterSpacing: '0.16em',
+          marginTop: 4,
+        }}>
           {isRunning ? 'PAUSE' : 'FORTSETT'}
-        </span>
+        </div>
       </div>
     </button>
   )
 }
 
-export default function WorkoutPlayer({ workout, onClose, showInstructions = true }: Props) {
+// ─── Main component ───────────────────────────────────────────────────────────
+
+interface Props {
+  workout: WorkoutSections
+  onClose: () => void
+  showInstructions?: boolean
+}
+
+export default function WorkoutPlayer({ workout, onClose }: Props) {
   const poses = flattenWorkout(workout)
-  const [poseIndex, setPoseIndex] = useState(0)
+  const [idx, setIdx]           = useState(0)
   const [timeLeft, setTimeLeft] = useState(poses[0].assignedDurationSec)
-  const [isRunning, setIsRunning] = useState(true)
-  const [isTransitioning, setIsTransitioning] = useState(false)
-  const [instrSynlig, setInstrSynlig] = useState(showInstructions)
-  const audioCtxRef = useRef<AudioContext | null>(null)
+  const [isRunning, setIsRunning]     = useState(true)
+  const [transitioning, setTransitioning] = useState(false)
+  const audioRef = useRef<AudioContext | null>(null)
 
-  const currentPose = poses[poseIndex]
-  const poseProgress = 1 - timeLeft / currentPose.assignedDurationSec
-  const bgColor = getBgColor(poseProgress)
-  const imageSrc = getPoseImage(currentPose.slug)
+  const pose          = poses[idx]
+  const poseProgress  = 1 - timeLeft / pose.assignedDurationSec
+  const imageSrc      = getPoseImage(pose.slug)
+  const intensityStyle = getIntensityStyle(pose.intensity_label)
+  const sectionStyle   = SECTION_STYLE[pose.section] ?? { bg: TOKENS.greenLight, color: TOKENS.green }
 
-  // Session-fremdrift
-  const totalDuration = poses.reduce((acc, p) => acc + p.assignedDurationSec, 0)
-  const elapsedBefore = poses.slice(0, poseIndex).reduce((acc, p) => acc + p.assignedDurationSec, 0)
-  const sessionProgress = (elapsedBefore + (currentPose.assignedDurationSec - timeLeft)) / totalDuration
+  // Time-based session progress (more accurate than index-based)
+  const totalDuration  = poses.reduce((acc, p) => acc + p.assignedDurationSec, 0)
+  const elapsedBefore  = poses.slice(0, idx).reduce((acc, p) => acc + p.assignedDurationSec, 0)
+  const sessionProgress = (elapsedBefore + (pose.assignedDurationSec - timeLeft)) / totalDuration
 
-  const sectionColors: Record<string, string> = {
-    Oppvarming: 'rgba(255,185,110,0.7)',
-    Hovedprogram: 'rgba(110,210,255,0.7)',
-    Avspenning: 'rgba(190,150,255,0.7)',
-  }
-  const sectionDotColor = sectionColors[currentPose.section] ?? 'rgba(255,255,255,0.5)'
-
-  function ensureAudioCtx() {
-    if (!audioCtxRef.current) {
-      audioCtxRef.current = new AudioContext()
-    }
-    if (audioCtxRef.current.state === 'suspended') {
-      audioCtxRef.current.resume()
-    }
+  function ensureAudio() {
+    if (!audioRef.current) audioRef.current = new AudioContext()
+    if (audioRef.current.state === 'suspended') audioRef.current.resume()
   }
 
-  function triggerTransitionEffects() {
-    if (audioCtxRef.current) playTransitionTone(audioCtxRef.current)
-    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(60)
+  function triggerEffects() {
+    if (audioRef.current) playTransitionTone(audioRef.current)
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(50)
   }
 
-  function animateTransition(callback: () => void) {
-    setIsTransitioning(true)
-    setTimeout(() => {
-      callback()
-      setTimeout(() => setIsTransitioning(false), 50)
-    }, 300)
+  function animateTransition(cb: () => void) {
+    setTransitioning(true)
+    setTimeout(() => { cb(); setTimeout(() => setTransitioning(false), 50) }, 280)
   }
 
   const goToNext = useCallback(() => {
-    triggerTransitionEffects()
+    triggerEffects()
     animateTransition(() => {
-      if (poseIndex < poses.length - 1) {
-        const next = poseIndex + 1
-        setPoseIndex(next)
-        setTimeLeft(poses[next].assignedDurationSec)
+      if (idx < poses.length - 1) {
+        setIdx(idx + 1)
+        setTimeLeft(poses[idx + 1].assignedDurationSec)
       } else {
         onClose()
       }
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [poseIndex, poses, onClose])
+  }, [idx, poses, onClose])
 
   const goToPrev = useCallback(() => {
-    if (poseIndex === 0) return
-    triggerTransitionEffects()
+    if (idx === 0) return
+    triggerEffects()
     animateTransition(() => {
-      const prev = poseIndex - 1
-      setPoseIndex(prev)
-      setTimeLeft(poses[prev].assignedDurationSec)
+      setIdx(idx - 1)
+      setTimeLeft(poses[idx - 1].assignedDurationSec)
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [poseIndex, poses])
+  }, [idx, poses])
 
   useEffect(() => {
     if (!isRunning) return
-    const interval = setInterval(() => {
+    const id = setInterval(() => {
       setTimeLeft((t) => {
-        if (t <= 1) {
-          goToNext()
-          return 0
-        }
+        if (t <= 1) { goToNext(); return 0 }
         return t - 1
       })
     }, 1000)
-    return () => clearInterval(interval)
+    return () => clearInterval(id)
   }, [isRunning, goToNext])
 
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&family=DM+Sans:wght@300;400&display=swap');
-
-        @keyframes fadeUp {
+        @keyframes wp-up {
           from { opacity: 0; transform: translateY(12px); }
           to   { opacity: 1; transform: translateY(0); }
         }
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to   { opacity: 1; }
-        }
-        .pose-content {
-          animation: fadeUp 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
-        }
-        .pose-image-bg {
-          animation: fadeIn 0.8s ease both;
-        }
+        .wp-fade   { animation: wp-up 0.42s cubic-bezier(0.22,1,0.36,1) both; }
+        .wp-fade-2 { animation: wp-up 0.42s cubic-bezier(0.22,1,0.36,1) 0.06s both; }
         .glass-scroll::-webkit-scrollbar { display: none; }
         .glass-scroll { -ms-overflow-style: none; scrollbar-width: none; }
       `}</style>
 
-      {/* Root container */}
+      {/* Root */}
       <div
-        className="fixed inset-0 z-50 overflow-hidden"
-        style={{
-          backgroundColor: bgColor,
-          transition: 'background-color 2s ease',
-          fontFamily: "'DM Sans', sans-serif",
-        }}
-        onClick={ensureAudioCtx}
+        className="fixed inset-0 z-50 flex flex-col"
+        style={{ backgroundColor: TOKENS.bgPage, fontFamily: BODY, overflowY: 'auto' }}
+        onClick={ensureAudio}
       >
-        {/* Støy-tekstur */}
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`,
-            opacity: 0.04,
-            mixBlendMode: 'overlay',
-            zIndex: 1,
-          }}
-        />
 
-        {/* Bilde — synlig kort i øvre sone */}
+        {/* Session progress — 2px gold line */}
+        <div style={{ height: 2, backgroundColor: TOKENS.border, flexShrink: 0 }}>
+          <div style={{
+            height: '100%',
+            width: `${sessionProgress * 100}%`,
+            backgroundColor: TOKENS.gold,
+            transition: 'width 1s linear',
+          }} />
+        </div>
+
+        {/* Header */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '1rem 1.5rem 0.5rem',
+          flexShrink: 0,
+        }}>
+          <button
+            onClick={onClose}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: TOKENS.textGhost,
+              fontSize: '0.65rem',
+              letterSpacing: '0.18em',
+              fontFamily: BODY,
+              display: 'flex', alignItems: 'center', gap: 6,
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M9 2L4 7L9 12" stroke={TOKENS.textGhost} strokeWidth="1.2" strokeLinecap="round" />
+            </svg>
+            TILBAKE
+          </button>
+
+          {/* Section pill */}
+          <span style={{
+            backgroundColor: sectionStyle.bg,
+            color: sectionStyle.color,
+            fontSize: '0.58rem',
+            letterSpacing: '0.16em',
+            fontWeight: 400,
+            padding: '0.25rem 0.75rem',
+            borderRadius: 999,
+            fontFamily: BODY,
+          }}>
+            {pose.section.toUpperCase()}
+          </span>
+
+          <span style={{
+            color: TOKENS.textGhost,
+            fontFamily: BODY,
+            fontSize: '0.65rem',
+            letterSpacing: '0.06em',
+          }}>
+            {idx + 1} / {poses.length}
+          </span>
+        </div>
+
+        {/* Image card */}
         <div
-          key={`img-${poseIndex}`}
-          className="absolute pose-image-bg"
+          key={`img-${idx}`}
           style={{
-            top: '4.5rem',
-            left: '1rem',
-            right: '1rem',
-            bottom: 'calc(60vh + 0.75rem)',
-            borderRadius: '1.25rem',
+            margin: '0.75rem 1.5rem',
+            borderRadius: 16,
+            backgroundColor: TOKENS.bgCardAlt,
+            border: `1px solid ${TOKENS.border}`,
             overflow: 'hidden',
-            backgroundColor: 'rgba(0,0,0,0.18)',
-            zIndex: 2,
-            opacity: isTransitioning ? 0 : 1,
-            transition: 'opacity 0.35s ease',
+            position: 'relative',
+            height: '36vw',
+            maxHeight: 220,
+            minHeight: 140,
+            flexShrink: 0,
+            opacity: transitioning ? 0 : 1,
+            transition: 'opacity 0.28s ease',
           }}
         >
           {imageSrc ? (
             <Image
               src={imageSrc}
-              alt={currentPose.name_en}
+              alt={pose.name_en}
               fill
-              className="object-contain p-3"
               priority
+              style={{
+                objectFit: 'contain',
+                padding: '1rem',
+                mixBlendMode: 'multiply',
+              }}
             />
           ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <span style={{ fontSize: '3rem', opacity: 0.15 }}>🧘</span>
+            <div style={{
+              width: '100%', height: '100%',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <svg width="32" height="42" viewBox="0 0 28 36" fill="none" style={{ opacity: 0.15 }}>
+                <path
+                  d="M14 33 C14 33, 3 24, 3 14 C3 7, 7.5 3, 14 3 C20.5 3, 25 7, 25 14 C25 24, 14 33, 14 33Z"
+                  stroke={TOKENS.textSecondary}
+                  strokeWidth="1.2"
+                  strokeLinecap="round"
+                />
+                <path d="M14 33 L14 6" stroke={TOKENS.textSecondary} strokeWidth="1.2" strokeLinecap="round" />
+              </svg>
             </div>
           )}
         </div>
 
-        {/* Gradient veil: transparent → bgColor fra midten ned */}
+        {/* Pose name */}
         <div
-          className="absolute inset-x-0 bottom-0 pointer-events-none"
+          key={`name-${idx}`}
+          className="wp-fade"
           style={{
-            height: '65%',
-            background: `linear-gradient(to bottom, transparent 0%, ${bgColor} 55%)`,
-            transition: 'background 2s ease',
-            zIndex: 3,
+            padding: '0 1.5rem',
+            flexShrink: 0,
+            opacity: transitioning ? 0 : 1,
+            transition: 'opacity 0.28s ease',
           }}
-        />
-
-        {/* Sesjons-fremgangsbar — 2px øverst */}
-        <div
-          className="absolute top-0 left-0 right-0 pointer-events-none"
-          style={{ height: '2px', backgroundColor: 'rgba(255,255,255,0.1)', zIndex: 10 }}
         >
-          <div
-            style={{
-              height: '100%',
-              width: `${sessionProgress * 100}%`,
-              backgroundColor: 'rgba(255,255,255,0.45)',
-              transition: 'width 1s linear',
-            }}
-          />
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <h2 style={{
+              fontFamily: DISPLAY,
+              fontSize: 'clamp(1.8rem, 7vw, 2.4rem)',
+              fontWeight: 300,
+              color: TOKENS.textPrimary,
+              margin: 0,
+              lineHeight: 1.05,
+              letterSpacing: '-0.01em',
+            }}>
+              {pose.name_no}
+            </h2>
+            {intensityStyle && (
+              <span style={{
+                backgroundColor: intensityStyle.bg,
+                color: intensityStyle.color,
+                fontSize: '0.58rem',
+                letterSpacing: '0.12em',
+                padding: '0.2rem 0.55rem',
+                borderRadius: 999,
+                fontFamily: BODY,
+                alignSelf: 'center',
+                flexShrink: 0,
+              }}>
+                {pose.intensity_label.toUpperCase()}
+              </span>
+            )}
+          </div>
+
+          <p style={{
+            fontFamily: DISPLAY,
+            fontSize: '0.9rem',
+            fontStyle: 'italic',
+            fontWeight: 300,
+            color: TOKENS.textGhost,
+            marginTop: '0.15rem',
+            letterSpacing: '0.04em',
+          }}>
+            {pose.name_en}
+          </p>
         </div>
 
-        {/* Svevende header */}
-        <div
-          className="absolute top-0 left-0 right-0 flex items-center justify-between"
-          style={{ padding: '1.75rem 1.25rem 0.75rem', zIndex: 11 }}
-        >
-          <button
-            onClick={onClose}
-            className="text-white"
-            style={{ opacity: 0.38, fontSize: '0.7rem', letterSpacing: '0.18em', fontWeight: 300 }}
-          >
-            AVSLUTT
-          </button>
+        {/* Separator */}
+        <div style={{ margin: '0.75rem 1.5rem', height: 1, backgroundColor: TOKENS.border, flexShrink: 0 }} />
 
-          {/* Instruksjon-toggle */}
-          {currentPose.instruksjon && currentPose.instruksjon.length > 0 && (
-            <button
-              onClick={() => setInstrSynlig((v) => !v)}
-              className="flex items-center gap-1.5 text-white transition-opacity duration-150"
-              style={{ opacity: instrSynlig ? 0.75 : 0.32, fontSize: '0.62rem', letterSpacing: '0.14em', fontWeight: 300 }}
-              aria-label={instrSynlig ? 'Skjul instruksjon' : 'Vis instruksjon'}
-            >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                <path d="M4 5h8M4 8h6M4 11h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-              </svg>
-              STEG
-            </button>
+        {/* Instructions */}
+        <div
+          key={`desc-${idx}`}
+          className="wp-fade-2 glass-scroll"
+          style={{
+            padding: '0 1.5rem',
+            flex: 1,
+            overflowY: 'auto',
+            opacity: transitioning ? 0 : 1,
+            transition: 'opacity 0.28s ease',
+          }}
+        >
+          {pose.instruksjon && pose.instruksjon.length > 0 ? (
+            <ol style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+              {pose.instruksjon.map((step, i) => (
+                <li key={i} style={{
+                  display: 'flex',
+                  gap: '0.75rem',
+                  marginBottom: '0.55rem',
+                  alignItems: 'flex-start',
+                }}>
+                  <span style={{
+                    fontFamily: BODY,
+                    fontSize: '0.6rem',
+                    color: TOKENS.gold,
+                    fontWeight: 400,
+                    letterSpacing: '0.06em',
+                    paddingTop: '0.2rem',
+                    minWidth: 16,
+                    flexShrink: 0,
+                  }}>
+                    {String(i + 1).padStart(2, '0')}
+                  </span>
+                  <span style={{
+                    fontFamily: BODY,
+                    fontSize: '0.875rem',
+                    color: TOKENS.textPrimary,
+                    fontWeight: 300,
+                    lineHeight: 1.65,
+                    letterSpacing: '0.01em',
+                  }}>
+                    {step}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          ) : pose.function_desc ? (
+            <p style={{
+              fontFamily: BODY,
+              fontSize: '0.875rem',
+              color: TOKENS.textPrimary,
+              fontWeight: 300,
+              lineHeight: 1.7,
+              margin: 0,
+            }}>
+              {pose.function_desc}
+            </p>
+          ) : null}
+
+          {pose.kontraindikasjon && (
+            <p style={{
+              fontFamily: BODY,
+              fontSize: '0.75rem',
+              color: TOKENS.textGhost,
+              fontStyle: 'italic',
+              fontWeight: 300,
+              lineHeight: 1.65,
+              marginTop: '0.75rem',
+            }}>
+              {pose.kontraindikasjon}
+            </p>
           )}
 
-          <div className="flex items-center gap-1.5">
-            <span
-              className="w-1.5 h-1.5 rounded-full"
-              style={{ backgroundColor: sectionDotColor }}
-            />
-            <span
-              className="text-white"
-              style={{ fontSize: '0.65rem', letterSpacing: '0.16em', opacity: 0.55, fontWeight: 300 }}
-            >
-              {currentPose.section.toUpperCase()}
+          {pose.muscle_groups.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginTop: '0.75rem', paddingBottom: '0.5rem' }}>
+              {pose.muscle_groups.map((mg) => (
+                <span key={mg} style={{
+                  backgroundColor: TOKENS.bgCard,
+                  color: TOKENS.textSecondary,
+                  border: `1px solid ${TOKENS.border}`,
+                  fontFamily: BODY,
+                  fontSize: '0.58rem',
+                  letterSpacing: '0.1em',
+                  padding: '0.18rem 0.55rem',
+                  borderRadius: 999,
+                }}>
+                  {mg.toUpperCase()}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Separator */}
+        <div style={{ margin: '0.75rem 1.5rem 0', height: 1, backgroundColor: TOKENS.border, flexShrink: 0 }} />
+
+        {/* Timer + navigation */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '0.6rem 2rem max(env(safe-area-inset-bottom), 1rem)',
+          flexShrink: 0,
+        }}>
+          <button
+            onClick={goToPrev}
+            disabled={idx === 0}
+            style={{
+              background: 'none', border: 'none',
+              cursor: idx === 0 ? 'default' : 'pointer',
+              display: 'flex', flexDirection: 'column',
+              alignItems: 'center', gap: 5,
+              opacity: idx === 0 ? 0.18 : 0.55,
+            }}
+            aria-label="Forrige pose"
+          >
+            <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+              <path d="M14 4L7 11L14 18" stroke={TOKENS.textPrimary} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span style={{
+              color: TOKENS.textSecondary,
+              fontFamily: BODY,
+              fontSize: '0.52rem',
+              letterSpacing: '0.14em',
+            }}>
+              FORRIGE
             </span>
-          </div>
+          </button>
 
-          <span
-            className="text-white"
-            style={{ opacity: 0.3, fontSize: '0.7rem', letterSpacing: '0.1em', fontWeight: 300 }}
+          <CircularTimer
+            progress={poseProgress}
+            timeLeft={timeLeft}
+            isRunning={isRunning}
+            onToggle={() => {
+              ensureAudio()
+              setIsRunning((r) => !r)
+            }}
+          />
+
+          <button
+            onClick={goToNext}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              display: 'flex', flexDirection: 'column',
+              alignItems: 'center', gap: 5,
+              opacity: 0.55,
+            }}
+            aria-label="Neste pose"
           >
-            {poseIndex + 1} / {poses.length}
-          </span>
+            <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+              <path d="M8 4L15 11L8 18" stroke={TOKENS.textPrimary} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span style={{
+              color: TOKENS.textSecondary,
+              fontFamily: BODY,
+              fontSize: '0.52rem',
+              letterSpacing: '0.14em',
+            }}>
+              NESTE
+            </span>
+          </button>
         </div>
 
-        {/* Frosted glass panel — vokser opp fra bunnen */}
-        <div
-          className="absolute bottom-0 left-0 right-0 flex flex-col"
-          style={{
-            height: '60vh',
-            backdropFilter: 'blur(32px)',
-            WebkitBackdropFilter: 'blur(32px)',
-            backgroundColor: 'rgba(0,0,0,0.12)',
-            borderTop: '1px solid rgba(255,255,255,0.07)',
-            borderRadius: '1.75rem 1.75rem 0 0',
-            zIndex: 5,
-          }}
-        >
-          {/* Pose-navn */}
-          <div
-            key={`name-${poseIndex}`}
-            className="px-6 pt-5 pb-1 shrink-0 pose-content"
-            style={{ opacity: isTransitioning ? 0 : 1, transition: 'opacity 0.3s ease' }}
-          >
-            <h2
-              className="text-white"
-              style={{
-                fontFamily: "'Cormorant Garamond', serif",
-                fontSize: 'clamp(1.7rem, 6.5vw, 2.4rem)',
-                fontWeight: 300,
-                lineHeight: 1.1,
-                letterSpacing: '-0.01em',
-              }}
-            >
-              {currentPose.name_no}
-            </h2>
-            <p
-              className="text-white italic mt-0.5"
-              style={{
-                fontFamily: "'Cormorant Garamond', serif",
-                fontSize: '0.9rem',
-                fontWeight: 300,
-                opacity: 0.4,
-                letterSpacing: '0.04em',
-              }}
-            >
-              {currentPose.name_en}
-            </p>
-          </div>
-
-          {/* Scrollbart innhold */}
-          <div
-            key={`desc-${poseIndex}`}
-            className="flex-1 overflow-y-auto px-6 pt-2 pb-1 glass-scroll pose-content"
-            style={{ opacity: isTransitioning ? 0 : 1, transition: 'opacity 0.3s ease' }}
-          >
-            {instrSynlig && currentPose.instruksjon && currentPose.instruksjon.length > 0 ? (
-              <ol className="space-y-2">
-                {currentPose.instruksjon.map((step, i) => (
-                  <li key={i} className="flex gap-2.5">
-                    <span
-                      className="shrink-0 text-white"
-                      style={{
-                        fontSize: '0.65rem',
-                        opacity: 0.32,
-                        marginTop: '0.3em',
-                        letterSpacing: '0.06em',
-                        fontWeight: 300,
-                        minWidth: '1.4em',
-                      }}
-                    >
-                      {String(i + 1).padStart(2, '0')}
-                    </span>
-                    <span
-                      className="text-white leading-relaxed"
-                      style={{ fontSize: '0.82rem', opacity: 0.8, fontWeight: 300, lineHeight: 1.65 }}
-                    >
-                      {step}
-                    </span>
-                  </li>
-                ))}
-              </ol>
-            ) : currentPose.function_desc ? (
-              <p
-                className="text-white leading-relaxed"
-                style={{ fontSize: '0.84rem', opacity: 0.8, fontWeight: 300, lineHeight: 1.65 }}
-              >
-                {currentPose.function_desc}
-              </p>
-            ) : null}
-
-            {currentPose.kontraindikasjon && (
-              <p
-                className="text-white mt-3 leading-relaxed"
-                style={{ fontSize: '0.7rem', opacity: 0.38, fontWeight: 300, lineHeight: 1.6, fontStyle: 'italic' }}
-              >
-                ⚠ {currentPose.kontraindikasjon}
-              </p>
-            )}
-
-            {currentPose.muscle_groups.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mt-3 pb-1">
-                {currentPose.muscle_groups.map((mg) => (
-                  <span
-                    key={mg}
-                    className="text-white px-2 py-0.5 rounded-full"
-                    style={{
-                      fontSize: '0.62rem',
-                      opacity: 0.45,
-                      backgroundColor: 'rgba(255,255,255,0.08)',
-                      letterSpacing: '0.08em',
-                    }}
-                  >
-                    {mg}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Timer + navigasjon — forankret i bunnen av glasspanelet */}
-          <div
-            className="px-5 py-4 flex items-center justify-between shrink-0"
-            style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}
-          >
-            <button
-              onClick={goToPrev}
-              disabled={poseIndex === 0}
-              className="flex flex-col items-center gap-1"
-              style={{ opacity: poseIndex === 0 ? 0.12 : 0.5 }}
-              aria-label="Forrige pose"
-            >
-              <svg width="26" height="26" viewBox="0 0 28 28" fill="none">
-                <path d="M18 6L10 14L18 22" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-              <span className="text-white" style={{ fontSize: '0.55rem', letterSpacing: '0.12em' }}>FORRIGE</span>
-            </button>
-
-            <CircularTimer
-              progress={poseProgress}
-              timeLeft={timeLeft}
-              isRunning={isRunning}
-              onToggle={() => {
-                ensureAudioCtx()
-                setIsRunning((r) => !r)
-              }}
-            />
-
-            <button
-              onClick={goToNext}
-              className="flex flex-col items-center gap-1"
-              style={{ opacity: 0.5 }}
-              aria-label="Neste pose"
-            >
-              <svg width="26" height="26" viewBox="0 0 28 28" fill="none">
-                <path d="M10 6L18 14L10 22" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-              <span className="text-white" style={{ fontSize: '0.55rem', letterSpacing: '0.12em' }}>NESTE</span>
-            </button>
-          </div>
-        </div>
       </div>
     </>
   )

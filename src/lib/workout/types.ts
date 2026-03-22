@@ -55,7 +55,7 @@ export interface WorkoutConfig {
   warmupMinutes: number
   mainMinutes: number
   cooldownMinutes: number
-  muscleFocus?: string
+  muscleFocus?: string[]
 }
 
 export interface WorkoutPoseCard extends Pose {
